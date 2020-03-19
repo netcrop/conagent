@@ -1,0 +1,26 @@
+Port 22
+HostKey /etc/ssh/ssh_host_rsa_key
+ClientAliveInterval 300
+ClientAliveCountMax 8
+Protocol 2
+UsePrivilegeSeparation yes
+SyslogFacility AUTH
+LogLevel INFO
+LoginGraceTime 120
+PermitRootLogin no
+StrictModes yes
+PubkeyAuthentication yes
+IgnoreRhosts yes
+HostbasedAuthentication no
+PermitEmptypasswords no
+PasswordAuthentication yes
+ChallengeResponseAuthentication no
+X11Forwarding no
+X11DisplayOffset 10
+PrintMotd no
+PrintLastLog no
+TCPKeepAlive yes
+MaxStartups 30:30:60
+AcceptEnv LANG LC_*
+Subsystem sftp /usr/lib/ssh/sftp-server
+UsePAM yes

@@ -1,0 +1,44 @@
+.TH conagent 1
+.SH NAME
+conagent
+.SH SYNOPSIS
+.B conagent.run
+.SH DESCRIPTION
+Conagent is a Kernel Virtual Machine Configuration script, written in Bash/SHELL.
+.SH MAINTENANCE FUNCTIONS
+.TP
+.I "conagent.reconfig"
+Install custom ssh_config configuration file.
+.TP
+.I "conagentd.reconfig"
+Install custom sshd_config configuration file.
+.TP
+.I "conagent.genkey"
+Create Openssh Key pair and save it inside a backup directory and ~/.ssh/
+.TP
+.I "conagent.changepass"
+Change Openssh private Key password.
+.SH SCRIPTS
+.TP
+.I "conagent.addkey"
+Add Openssh Key into current interactive BASH session.
+.TP
+.I "conagent.sendkey"
+Send Openssh public key into a remote Virtual Machine and append it into ~/.ssh/authorized_keys
+.SH AUTHORS
+written by Yang Li.
+.SH REPORTING BUGS
+github.com/netcrop/conagent
+.SH LIMITATIONS
+.SH LICENSE
+GNU GENERAL PUBLIC LICENSE Version 2
+
+.SH EXAMPLES
+.VE
+.LP
+
+  node1@eva > cd conagent/
+  node1@eva > conagent.genkey sample/ ${USER} ${HOSTNAME} rsa 1
+  node1@eva > conagent.changepass sample/eva_node1_rsa_20190208091201 1
+  node1@eva > conagent.addkey
+  node1@eva > conagent.sendkey sample/eva_node1_rsa_20190208091201 node2

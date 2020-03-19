@@ -1,0 +1,15 @@
+Host *
+ForwardAgent no
+ForwardX11 no
+Port 22
+VisualHostKey no
+HashKnownHosts yes
+GSSAPIAuthentication yes
+GSSAPIDelegateCredentials no
+PreferredAuthentications publickey,hostbased,keyboard-interactive,password,gssapi-with-mic
+PasswordAuthentication yes
+AddressFamily inet
+ControlMaster auto
+ControlPath /home/%u/.ssh/ssh-master-%r:%h:%p:%C
+ControlPersist 1600
+AddressFamily any
