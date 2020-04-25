@@ -12,13 +12,11 @@ coreutils
 openssh
 sudo
 openpgp
-
-## Recommended usage.
-Add
-source conagent/conagent.sh
-inside ~/.bashrc
-
+```
+## Using conagent
+```
 node1@eva > cd conagent/
+node1@eva > source conagent.sh
 node1@eva > conagent.genkey sample/ ${USER} ${HOSTNAME} rsa 1
 node1@eva > conagent.changepass sample/eva_node1_rsa_20190208091201 1
 node1@eva > conagent.addkey
@@ -30,7 +28,7 @@ We use rolling releases.
 
 ## Reporting a bug and security issues
 
-github.com/netcrop/conagent/issues
+github.com/netcrop/conagent/pulls
 
 ## License
 
