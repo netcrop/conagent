@@ -201,6 +201,7 @@ conagent.addkeys()
     \${Addkey[debug]}
     if [[ \${Addkey[ttyowner]} != \${Addkey[uid]} ]];then
         \builtin printf "User ${user} needs to become the owner of \${Addkey[tty]}.\n"
+        conagent.addkey.delocate   
         return
     fi
     conagent.agent.start
