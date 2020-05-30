@@ -2,11 +2,11 @@
 Description=OpenSSH Daemon
 Wants=sshdgenkeys.service
 After=sshdgenkeys.service
-Requires=network.target
-After=network.target
+Requires=network-online.target
+After=network-online.target
 
 [Service]
-ExecStartPre=/bin/sleep 10
+#ExecStartPre=/bin/sleep 10
 ExecStart=/usr/bin/sshd -D
 ExecReload=/bin/kill -HUP $MAINPID
 KillMode=process

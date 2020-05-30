@@ -2,7 +2,7 @@ conagent.substitute()
 {
     local reslist devlist user mandir githubdir port cmd i conagentremoteport1 \
     conagentlocalport1 includedir libdir bindir perl_version vendor_perl \
-    cmdlist='sed shred perl lsof sudo ssh tty sshd
+    signal cmdlist='sed shred perl lsof sudo ssh tty sshd
     basename cat id cut bash mktemp egrep date env mv w
     cp chmod ln chown rm touch ssh-agent ps head mkdir
     pwgen sha1sum gpg ssh-add find file tail tr ss awk sleep ping
@@ -46,12 +46,13 @@ conagent.substitute()
     conagentremoteport1=${CONAGENTREMOTEPORT1}
     conagentlocalport1=${CONAGENTLOCALPORT1}
     sshconfig=${HOME}/.ssh/ssh_config
+    signal='RETURN HUP INT TERM EXIT'
     \builtin \source <($cat<<-SUB
 
 conagent.changepass()
 {
     \builtin \shopt -s extdebug
-    \builtin \trap "conagent.genkey.delocate" SIGHUP SIGTERM SIGINT RETURN
+    \builtin \trap "conagent.genkey.delocate" $signal
     declare -A Change=(
     [keyfile]="\${1:?[key file][optional debug flag: 0|1]}"
     [debug]="\${2}"
@@ -79,7 +80,7 @@ conagent.changepass()
         builtin unset SSH_ASKPASS
         builtin declare -x DISPLAY=\${Change[display]}
         builtin unset -f conagent.genkey.delocate
-        builtin trap - SIGHUP SIGTERM SIGINT RETURN
+        builtin trap - $signal
         builtin shopt -u extdebug
         set +o xtrace
     }
@@ -160,7 +161,7 @@ SSHLOADKEYS
     builtin declare -x DISPLAY=':0'
     builtin declare -x GPG_TTY="\$($tty)"
     for i in \${Key[@]};do
-        [[ -n \${Hash["\$($cut -d' ' -f2 \$i.pub)"]} ]] && continue
+        [[ -n \${Hash["\$($cut -d' ' -f2 i.pub)"]} ]] && continue
         Addkey[passasc]="\${i}_pass.asc"
         [[ -r \${Addkey[passasc]} ]] || continue
         Addkey[askpass]="\$($mktemp --tmpdir=/var/tmp)"
@@ -229,7 +230,7 @@ SSHADDKEYS
     \builtin declare -x DISPLAY=':0'
     \builtin declare -x GPG_TTY="\${Addkey[tty]}"
     for i in \${Key[@]};do
-        [[ -n \${Hash["\$($cut -d' ' -f2 \${i}.pub)"]} ]] && continue
+        [[ -n \${Hash["\$($cut -d' ' -f2 i.pub)"]} ]] && continue
         Addkey[passasc]="\${i}_pass.asc"
         [[ -r \${Addkey[passasc]} ]] || continue
         Addkey[askpass]="\$($mktemp --dry-run --tmpdir=/var/tmp)"
@@ -271,7 +272,7 @@ conagent.genkey()
     [tty]="\$($tty)"
     [ttyowner]="\$($stat --format=%u \${Genkey[tty]})"
     )
-    \builtin \trap "conagent.genkey.delocate" SIGHUP SIGTERM SIGINT RETURN
+    \builtin \trap "conagent.genkey.delocate" $signal
     [[ "\${Genkey[debug]}" -eq 1 ]] && Genkey[debug]="set -o xtrace" || Genkey[debug]=''
     \${Genkey[debug]}
     conagent.genkey.delocate()
@@ -281,7 +282,7 @@ conagent.genkey()
         \builtin declare -x DISPLAY=\${Genkey[display]}
         \builtin unset -f conagent.genkey.delocate
         \builtin \shopt -u extdebug
-        \builtin trap - SIGHUP SIGTERM SIGINT RETURN
+        \builtin trap - $signal
         \builtin set +o xtrace
     }
     if [[ \${Genkey[ttyowner]} != \${Genkey[uid]} ]];then
@@ -368,11 +369,11 @@ conagent.authorizedkey()
     local keycontent=\\\\\\\${1:?[keycontent]}
     local i authorizedkey=\\\\\\\${2:-\\\\\\\$HOME/.ssh/authorized_keys}
     local tmpfile=/var/tmp/\\\\\\\${RANDOM}
-    \builtin \trap "conagent.genkey.delocate" SIGHUP SIGTERM SIGINT RETURN
+    \builtin \trap "conagent.genkey.delocate" $signal
     conagent.genkey.delocate()
     {
         [[ -r \\\\\\\${tmpfile} ]] && \\\$rm -f \\\\\\\$tmpfile
-        builtin trap - SIGHUP SIGTERM SIGINT RETURN
+        builtin trap - $signal
         builtin unset -f conagent.genkey.delocate
         builtin unset -f conagent.authorizedkey
         builtin shopt -u extdebug
@@ -407,11 +408,11 @@ conagent.authorizedkey()
     local debug=\${3}
     local tmpfile=\$($mktemp --tmpdir=/var/tmp)
     \builtin \shopt -s extdebug
-    \builtin \trap "conagent.genkey.delocate" SIGHUP SIGTERM SIGINT RETURN
+    \builtin \trap "conagent.genkey.delocate" $signal
     conagent.genkey.delocate()
     {
         [[ -r \${tmpfile} ]] && $shred -fu \$tmpfile
-        \builtin \trap - SIGHUP SIGTERM SIGINT RETURN
+        \builtin \trap - $signal
         \builtin \unset -f conagent.genkey.delocate
         \builtin \shopt -u extdebug
         \builtin \set +o xtrace
@@ -422,7 +423,7 @@ conagent.authorizedkey()
     $touch \$authorizedkey
     declare -A Hash
     for i in \$($cut -d' ' -f2 \$authorizedkey);do
-        Hash["\$i"]=1;
+        Hash[\$i]=1;
     done
     [[ -r "\$keycontent" ]] && keycontent="\$($cat \$keycontent)"
     i="\$($cut -d' ' -f2 <<<"\$keycontent")"
@@ -438,10 +439,10 @@ conagent.scankey()
 }
 conagent.kill.openfile()
 {
-    local pid=\$($lsof -i|$head -n 2|$tail -n 1|\
-    $tr -s ' '|$cut -d' ' -f2)
-    builtin kill -s KILL \$pid
-} 
+    declare -a Pid=(\$($lsof -i|$tail -n 1))
+    [[ -n \${Pid[1]} ]] || return 
+    builtin kill -s KILL \${Pid[1]}
+}
 conagentd.checkconfig()
 {
     $sshd -t -f \${1:?[config]}
