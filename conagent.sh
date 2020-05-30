@@ -161,7 +161,7 @@ SSHLOADKEYS
     builtin declare -x DISPLAY=':0'
     builtin declare -x GPG_TTY="\$($tty)"
     for i in \${Key[@]};do
-        [[ -n \${Hash["\$($cut -d' ' -f2 i.pub)"]} ]] && continue
+        [[ -n \${Hash["\$($cut -d' ' -f2 \${i}.pub)"]} ]] && continue
         Addkey[passasc]="\${i}_pass.asc"
         [[ -r \${Addkey[passasc]} ]] || continue
         Addkey[askpass]="\$($mktemp --tmpdir=/var/tmp)"
@@ -230,7 +230,7 @@ SSHADDKEYS
     \builtin declare -x DISPLAY=':0'
     \builtin declare -x GPG_TTY="\${Addkey[tty]}"
     for i in \${Key[@]};do
-        [[ -n \${Hash["\$($cut -d' ' -f2 i.pub)"]} ]] && continue
+        [[ -n \${Hash["\$($cut -d' ' -f2 \${i}.pub)"]} ]] && continue
         Addkey[passasc]="\${i}_pass.asc"
         [[ -r \${Addkey[passasc]} ]] || continue
         Addkey[askpass]="\$($mktemp --dry-run --tmpdir=/var/tmp)"
