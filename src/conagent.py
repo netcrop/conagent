@@ -1,26 +1,37 @@
-#! /bin/env /bin/python3
+#! /bin/env /bin/python3.8
+from time import sleep
 from datetime import datetime
 from getpass import getuser
 from socket import gethostname
 from random import randint
-from os import stat,getuid,environ,unlink
+from os import stat,getuid,environ,unlink,chmod,getenv
 from subprocess import Popen, PIPE,call, run
 def genkey():
-    p = run('tty',stdout=PIPE,text=True)
-    curtty = p.stdout.rstrip('\n')
+    proc = run('tty',stdout=PIPE,text=True)
+    curtty = proc.stdout.rstrip('\n')
     ttyuid = stat(curtty).st_uid
     if ttyuid != uid:
         print("User uid:",uid,"needs to became the owner of", curtty)
         return
 
     run(['mkdir','-p',sshdir])
-    fh = open(tmpfile,'w+')
-    run(['pwgen','--capitalize','--numerals','--num-passwords=1','--secure'],stdout=fh)
-    fh2 = open(passasc,'w')
+    tmpfh = open(tmpfile,'w')
+    proc = run(['pwgen','--capitalize','--numerals',
+    '--num-passwords=1','--secure'],stdout=tmpfh,stderr=PIPE)
     environ['GPG_TTY'] = curtty
-    run(['gpg','--symmetric','--no-verbose','--quiet',
-    '--output',passasc,'--armor'],stdin=fh)
-    unlink(tmpfile)
+    passfh = open(passasc,'w')
+    tmpfh = open(tmpfile,'r')
+    proc = run(['gpg','--symmetric','--no-verbose','--quiet',
+    '--armor'],stdin=tmpfh,stdout=passfh,stderr=PIPE)
+    tmpfh = open(tmpfile,'w')
+    print ("""#!/bin/env /bin/bash
+builtin declare -x GPG_TTY=%s 
+gpg --decrypt --no-verbose --quiet %s"""%(curtty,passasc),file=tmpfh)
+    environ['DISPLAY'] = ':0'
+    environ['SSH_ASKPASS'] = tmpfile
+    chmod(tmpfile,0o700) 
+    
+#    unlink(tmpfile)
 if __name__ == '__main__':
     keytype = 'rsa'
     hostname = gethostname()
@@ -28,7 +39,7 @@ if __name__ == '__main__':
     username = getuser()
     homedir = environ.get('HOME')
     sshdir = homedir+'/tmp/'
-    tmpfile = '/tmp/' + str(randint(10000,99999))
+    tmpfile = '/var/tmp/' + str(randint(10000,99999))
     date = datetime.utcnow().strftime("%Y%m%d%H%M%S")
     keyfile = sshdir + username + '_' + hostname + '_' + keytype + '_' + date
     passasc = keyfile + '_pass.asc'
