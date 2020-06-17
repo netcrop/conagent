@@ -4,7 +4,7 @@ conagent.substitute()
     conagentlocalport1 includedir libdir bindir perl_version vendor_perl \
     signal cmdlist='sed shred perl lsof sudo ssh tty sshd
     basename cat id cut bash mktemp egrep date env mv w
-    cp chmod ln chown rm touch ssh-agent ps head mkdir
+    cp chmod ln chown rm touch ssh-agent ps head mkdir chattr lsattr
     pwgen sha1sum gpg ssh-add find file tail tr ss awk sleep ping
     stat scp groups ssh-keyscan ssh-keygen'
 
@@ -27,12 +27,12 @@ conagent.substitute()
     [[ -z $reslist ]] ||\
     { 
         \builtin printf "%s\n" \
-        "$FUNCNAME says: ( $reslist ) These Required Commands are missing."
+        "$FUNCNAME Required: $reslist"
         return
     }
     [[ -z $devlist ]] ||\
     \builtin printf "%s\n" \
-    "$FUNCNAME says: ( $devlist ) These Optional Commands for further development."
+    "$FUNCNAME Optional: $devlist"
 
     perl_version="$($perl -e 'print $^V')"
     vendor_perl=/usr/share/perl5/vendor_perl/
@@ -49,6 +49,11 @@ conagent.substitute()
     signal='RETURN HUP INT TERM EXIT'
     \builtin \source <($cat<<-SUB
 
+agent.py.install()
+{
+    $cp src/conagent.py $bindir/agent
+    $chmod u=rwx $bindir/agent
+}
 conagent.changepass()
 {
     \builtin \shopt -s extdebug
@@ -456,7 +461,10 @@ conagent.interfaces()
 conagentd.systmedconfig()
 {
     local conf=\${1:?[sshd.service conffile]}
+    $sudo $chattr -i /lib/systemd/system/sshd.service
     $sudo $cp \${conf} /lib/systemd/system/sshd.service
+    $sudo $chattr +i /lib/systemd/system/sshd.service
+    $lsattr /lib/systemd/system/sshd.service 
 }
 conagent.reconfig()
 {
