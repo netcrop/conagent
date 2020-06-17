@@ -29,8 +29,10 @@ builtin declare -x GPG_TTY=%s
 gpg --decrypt --no-verbose --quiet %s"""%(curtty,passasc),file=tmpfh)
     environ['DISPLAY'] = ':0'
     environ['SSH_ASKPASS'] = tmpfile
-    chmod(tmpfile,0o700) 
-    
+    chmod(tmpfile,0o700)
+    tmp = username + '@' + hostname
+    arg = ['ssh-keygen','-C',tmp ,'-t', keytype,'-f', keyfile]
+    proc = run(arg,stdin=None)
 #    unlink(tmpfile)
 if __name__ == '__main__':
     keytype = 'rsa'
