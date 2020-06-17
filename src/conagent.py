@@ -1,13 +1,12 @@
 #! /bin/env /bin/python3.8
-import sys
-import os
+from sys import argv
 from glob import glob
 from time import sleep
 from datetime import datetime
 from getpass import getuser
 from socket import gethostname
 from random import randint
-from os import stat,getuid,environ,unlink,chmod,getenv,access
+from os import stat,getuid,environ,unlink,chmod,getenv,access,X_OK,W_OK,R_OK
 from subprocess import Popen, PIPE,call, run
 def genkey():
     proc = run('tty',stdout=PIPE,text=True)
@@ -15,8 +14,7 @@ def genkey():
     ttyuid = stat(curtty).st_uid
     if ttyuid != uid:
         print("User uid:",uid,"needs to became the owner of", curtty)
-        return
-
+        exit()
     run(['mkdir','-p',sshdir])
     tmpfh = open(tmpfile,'w')
     proc = run(['pwgen','--capitalize','--numerals',
@@ -37,16 +35,17 @@ gpg --decrypt --no-verbose --quiet %s"""%(curtty,passasc),file=tmpfh)
     nullfh = open('/dev/null','r')
     cmd = ['ssh-keygen','-C',userhost ,'-t', keytype,'-f', keyfile]
     proc = run(cmd,stdin=nullfh)
-    cmd = ' '.join(glob(sshdir + '*'))
-    cmd = 'cp -av ' + cmd + ' ' + backupdir
+    files = ' '.join(glob(sshdir + '*'))
+    cmd = 'chmod u=r,go= ' + files
+    run(cmd.split())
+    cmd = 'cp -av ' + files + ' ' + backupdir
     run(cmd.split()) 
-    unlink(tmpfile)
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        print(sys.argv[0],'[backup dir]')
+    if len(argv) != 2:
+        print(argv[0],'[backup dir]')
         exit()
-    backupdir = sys.argv[1]
-    if not (access(backupdir,os.X_OK) and access(backupdir,os.W_OK)):
+    backupdir = argv[1]
+    if not (access(backupdir,X_OK) and access(backupdir,W_OK)):
         print(backupdir,'inaccessible')
         exit()
     keytype = 'rsa'
@@ -60,4 +59,8 @@ if __name__ == '__main__':
     date = datetime.utcnow().strftime("%Y%m%d%H%M%S")
     keyfile = sshdir + username + '_' + hostname + '_' + keytype + '_' + date
     passasc = keyfile + '_pass.asc'
-    genkey()
+    try:
+        genkey()
+    finally:
+        if (access(tmpfile,R_OK) and access(tmpfile,W_OK)):
+            unlink(tmpfile)

@@ -1,5 +1,5 @@
 # Conagent
-Conagent is a Openssh key managment script, written in Bash/SHELL.
+Conagent is a Openssh key managment script, written in Bash/Python3.
 
   It can be used to create and distribute Openssh keys across virtual machines.
 ## Install, maintain and uninstall
@@ -8,10 +8,11 @@ Conagent is a Openssh key managment script, written in Bash/SHELL.
 ```
 required commands and packages:
 Bash version 4.4+
+Python 3.8+
 coreutils
 openssh
 sudo
-openpgp
+gnupg
 ```
 ## Using conagent
 ```
