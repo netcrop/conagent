@@ -59,8 +59,8 @@ class Conagent:
             self.cmd = 'cp -av ' + self.files + ' ' + self.backupdir
             run(self.cmd.split())
         finally:
-#            print(agent.__dict__)
-            for i in agent.__dict__.values():
+#            print(self.__dict__)
+            for i in self.__dict__.values():
                 if isinstance(i,io.TextIOWrapper):
                     i.close()
             if ( os.access(self.tmpfile,os.R_OK) and os.access(self.tmpfile,os.W_OK) ):
