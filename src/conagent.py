@@ -3,7 +3,10 @@ from subprocess import *
 import glob,io,subprocess,sys,os,socket,getpass,random,datetime
 class Conagent:
     def __init__(self,*argv):
+        if len(argv[0]) == 1:
+            self.usage()
         self.argv = argv
+        self.option = { '-h':self.usage ,'-g':self.genkey}
         self.keytype = 'rsa'
         self.hostname = socket.gethostname()
         self.uid = os.getuid()
@@ -18,8 +21,8 @@ class Conagent:
         self.passasc = self.keyfile + '_pass.asc'
     def genkey(self):
         try:
-            if len(self.argv[0]) != 2:
-                print(self.argv[0][0],'genkey [backup dir]')
+            if len(self.argv[1]) != 2:
+                print(self.argv[1][0],'genkey [backup dir]')
                 return
             self.backupdir = self.argv[0][1] 
             if not (os.access(self.backupdir,os.X_OK) 
@@ -66,6 +69,15 @@ class Conagent:
             if ( os.access(self.tmpfile,os.R_OK) and os.access(self.tmpfile,os.W_OK) ):
                 os.unlink(self.tmpfile)
                 print('finally')
+    def usage(self):
+        usage = ("""\
+        usage: [-g|-genkey] [-a|-addkey]\
+        """)
+        print( usage.replace("    ",""))
+        exit()
 if __name__ == '__main__':
     agent = Conagent(sys.argv)
-    agent.genkey()
+    try:
+        agent.option[agent.argv[0][1]]()
+    except KeyError:
+        agent.usage()
