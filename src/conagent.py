@@ -15,12 +15,13 @@ class Conagent:
         self.uid = os.getuid()
         self.username = getpass.getuser()
         self.userhost = self.username + '@' + self.hostname
-        self.homedir = os.environ.get('HOME')
+        self.homedir = os.environ.get('HOME') + '/'
         self.sshdir = self.homedir + '.ssh/'
         self.tmpfile = '/var/tmp/' + str(random.randint(10000,99999))
         self.date = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
         self.keyfile = self.sshdir + self.username + '_' + self.hostname + '_' + \
         self.keytype + '_' + self.date
+        self.pubkey = self.keyfile + '.pub'
         self.passasc = self.keyfile + '_pass.asc'
     def genkey(self):
         try:
@@ -29,7 +30,7 @@ class Conagent:
             self.backupdir = self.argv[0][2] 
             if not (os.access(self.backupdir,os.X_OK) 
             and os.access(self.backupdir,os.W_OK)):
-                self.usage()
+                self.usage(self.argv[0][1])
             self.checktty()
             run(['mkdir','-p',self.sshdir],check=True)
             self.tmpfh = open(self.tmpfile,'w+')
@@ -53,7 +54,7 @@ class Conagent:
             self.nullfh = open('/dev/null','r')
             run(['ssh-keygen','-C',self.userhost,'-t',self.keytype,'-f',self.keyfile],
             check=True,stdin=self.nullfh)
-            self.files = ' '.join(glob.glob(self.sshdir + '*'))
+            self.files = self.keyfile + ' ' + self.pubkey + ' ' + self.passasc 
             self.cmd = 'chmod u=r,go= ' + self.files
             run(self.cmd.split(),check=True);
             self.cmd = 'cp -av ' + self.files + ' ' + self.backupdir
@@ -69,7 +70,7 @@ class Conagent:
 
     def usage(self,option=1):
         try:
-            print(self.message[option])
+            print(self.message[option].replace("@","\n    "))
         except KeyError:
             for key in self.message:
                 print(key,self.message[key].replace("@","\n    "))
@@ -86,9 +87,8 @@ class Conagent:
     def addkey(self):
         if len(self.argv[0]) == 3:
             self.sshdir = self.argv[0][2]
-        if not (os.access(self.sshdir,os.X_OK) 
-        and os.access(self.sshdir,os.W_OK)):
-            self.usage()
+        if not (os.access(self.sshdir,os.X_OK) and os.access(self.sshdir,os.W_OK)):
+            self.usage(self.argv[0][1])
         self.checktty()
         os.environ['TTY'] = self.curtty
         print(os.environ.get('TTY'))
