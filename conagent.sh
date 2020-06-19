@@ -11,6 +11,7 @@ conagent.substitute()
     declare -A Devlist=(
     [sshfs]='sshfs'
     [fusermount3]='fusermount3'
+    [agent]='agent'
     )
     cmdlist="${Devlist[@]} $cmdlist"
     for cmd in $cmdlist;do
@@ -257,6 +258,10 @@ conagent.hostkey()
 }
 conagent.genkey()
 {
+    $agent -g "\$@"
+}
+_conagent.genkey()
+{
     \builtin \shopt -s extdebug
     declare -A Genkey=(
     [dir]=\${1:?[backup dir] optional: [user][host][keytype][debug flag: 0|1]}
@@ -323,19 +328,21 @@ conagent.agent.start()
     declare -a Arg=(\$($ps -C ssh-agent -o pid= -o user=|$egrep $user))
     local sshenv=\$HOME/.ssh/\${HOSTNAME}-ssh
     \builtin \source <(\builtin \printf "export SSH_TTY="\$($tty)"")
+    # When no existing agent
     if [[ -z \${Arg[0]} ]];then
         $ssh_agent | $head -n 2 > \$sshenv
-        \builtin \source \$HOME/.ssh/\${HOSTNAME}-ssh
+        \builtin \source \$sshenv
         return
     fi
     if [[ -r \$sshenv ]];then
-        \builtin \source \$HOME/.ssh/\${HOSTNAME}-ssh
+        \builtin \source \$sshenv
         return
     fi
+    # When first login session 
     \builtin \kill \${Arg[0]}
     \builtin \unset SSH_AGENT_PID SSH_AUTH_SOCK
     $ssh_agent | $head -n 2 > \$sshenv
-    \builtin \source \$HOME/.ssh/\${HOSTNAME}-ssh
+    \builtin \source \$sshenv
 }
 conagent.sendkey()
 {

@@ -3,17 +3,20 @@ from subprocess import *
 import glob,io,subprocess,sys,os,socket,getpass,random,datetime
 class Conagent:
     def __init__(self,*argv):
+        self.message = {'-h':'print this help message.',
+        '-g':'[backup dir]: generate new key and copy to user defined backup dir.',
+        '-a':'[ssh dir] add existing keys from user defined dir@default: $HOME/.ssh/ into ssh-agent cache'}
         if len(argv[0]) == 1:
             self.usage()
         self.argv = argv
-        self.option = { '-h':self.usage ,'-g':self.genkey}
+        self.option = { '-h':self.usage ,'-g':self.genkey, '-a':self.addkey }
         self.keytype = 'rsa'
         self.hostname = socket.gethostname()
         self.uid = os.getuid()
         self.username = getpass.getuser()
         self.userhost = self.username + '@' + self.hostname
         self.homedir = os.environ.get('HOME')
-        self.sshdir = self.homedir + '/tmp/'
+        self.sshdir = self.homedir + '.ssh/'
         self.tmpfile = '/var/tmp/' + str(random.randint(10000,99999))
         self.date = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
         self.keyfile = self.sshdir + self.username + '_' + self.hostname + '_' + \
@@ -21,19 +24,13 @@ class Conagent:
         self.passasc = self.keyfile + '_pass.asc'
     def genkey(self):
         try:
-            if len(self.argv[1]) != 2:
-                print(self.argv[1][0],'genkey [backup dir]')
-                return
-            self.backupdir = self.argv[0][1] 
+            if len(self.argv[0]) != 3:
+                self.usage(self.argv[0][1])
+            self.backupdir = self.argv[0][2] 
             if not (os.access(self.backupdir,os.X_OK) 
             and os.access(self.backupdir,os.W_OK)):
-                return
-            self.proc = run('tty',stdout=PIPE,text=True,check=True)
-            self.curtty = self.proc.stdout.rstrip('\n')
-            self.ttyuid = os.stat(self.curtty).st_uid
-            if self.ttyuid != self.uid:
-                print("User uid:",self.uid,"needs to became the owner of",self.curtty)
-                return
+                self.usage()
+            self.checktty()
             run(['mkdir','-p',self.sshdir],check=True)
             self.tmpfh = open(self.tmpfile,'w+')
             run(['pwgen','--capitalize','--numerals',
@@ -69,12 +66,32 @@ class Conagent:
             if ( os.access(self.tmpfile,os.R_OK) and os.access(self.tmpfile,os.W_OK) ):
                 os.unlink(self.tmpfile)
                 print('finally')
-    def usage(self):
-        usage = ("""\
-        usage: [-g|-genkey] [-a|-addkey]\
-        """)
-        print( usage.replace("    ",""))
+
+    def usage(self,option=1):
+        try:
+            print(self.message[option])
+        except KeyError:
+            for key in self.message:
+                print(key,self.message[key].replace("@","\n    "))
         exit()
+
+    def checktty(self):
+        self.proc = run('tty',stdout=PIPE,text=True,check=True)
+        self.curtty = self.proc.stdout.rstrip('\n')
+        self.ttyuid = os.stat(self.curtty).st_uid
+        if self.ttyuid != self.uid:
+            print("User uid:",self.uid,"needs to became the owner of",self.curtty)
+            exit()
+
+    def addkey(self):
+        if len(self.argv[0]) == 3:
+            self.sshdir = self.argv[0][2]
+        if not (os.access(self.sshdir,os.X_OK) 
+        and os.access(self.sshdir,os.W_OK)):
+            self.usage()
+        self.checktty()
+        os.environ['TTY'] = self.curtty
+        print(os.environ.get('TTY'))
 if __name__ == '__main__':
     agent = Conagent(sys.argv)
     try:
