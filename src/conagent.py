@@ -18,7 +18,7 @@ class Conagent:
         self.homedir = os.environ.get('HOME') + '/'
         self.sshdir = self.homedir + '.ssh/'
         self.tmpfile = '/var/tmp/' + str(random.randint(10000,99999))
-
+ 
     def genkey(self):
         try:
             if len(self.argv[0]) != 3:
@@ -27,58 +27,56 @@ class Conagent:
             if not (os.access(self.backupdir,os.X_OK) 
             and os.access(self.backupdir,os.W_OK)):
                 self.usage(self.argv[0][1])
+            self.tmpfile = '/var/tmp/' + str(random.randint(10000,99999))
             self.date = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
             self.keyfile = self.sshdir + self.username + '_' + self.hostname + '_' + \
             self.keytype + '_' + self.date
             self.pubkey = self.keyfile + '.pub'
             self.passasc = self.keyfile + '_pass.asc'
             self.checktty()
-            run(['mkdir','-p',self.sshdir],check=True)
-            self.tmpfh = open(self.tmpfile,'w+')
-            run(['pwgen','--capitalize','--numerals',
-            '--num-passwords=1','--secure'],stdout=self.tmpfh,check=True)
             os.environ['GPG_TTY'] = self.curtty
-            self.passfh = open(self.passasc,'w')
-            run(['gpg','--symmetric','--no-verbose','--quiet','--armor'],
-            stdin=self.tmpfh,stdout=self.passfh,check=True)
-            os.chmod(self.tmpfile,0o700)
-            self.tmpfh = open(self.tmpfile,'w')
+
+            run(['mkdir','-p',self.sshdir],check=True)
+
+            with open(self.tmpfile,'w') as self.tmpfh:
+                self.cmd = 'pwgen --capitalize --numerals --num-passwords=1 --secure'
+                run(self.cmd.split(),stdout=self.tmpfh,check=True)
+
+            with open(self.passasc,'w') as self.passfh:
+                with open(self.tmpfile,'r') as self.tmpfh:
+                    self.cmd = 'gpg --symmetric --no-verbose --quiet --armor'
+                    run(self.cmd.split(),stdin=self.tmpfh,stdout=self.passfh,check=True)
+
+
             self.script = ("""\
             #!/bin/env /bin/bash
             builtin declare -x GPG_TTY=%s
             /bin/gpg --decrypt --no-verbose --quiet %s""")
-            print( self.script.replace("    ","") % (self.curtty,self.passasc),
-            file=self.tmpfh)
-            self.tmpfh.close()
+
+            with open(self.tmpfile,'w') as self.tmpfh: 
+                print( self.script.replace("    ","") %
+                (self.curtty,self.passasc),file=self.tmpfh)
+
+            os.chmod(self.tmpfile,0o700)
             os.environ['DISPLAY'] = ':0'
             os.environ['SSH_ASKPASS'] = self.tmpfile
-            self.nullfh = open('/dev/null','r')
-            run(['ssh-keygen','-C',self.userhost,'-t',self.keytype,'-f',self.keyfile],
-            check=True,stdin=self.nullfh)
+
+            with open('/dev/null','r') as self.nullfh: 
+                self.cmd = 'ssh-keygen -C ' + self.userhost + ' -t ' \
+                + self.keytype + ' -f ' + self.keyfile
+                run(self.cmd.split(),check=True,stdin=self.nullfh)
+
             self.files = self.keyfile + ' ' + self.pubkey + ' ' + self.passasc 
             self.cmd = 'chmod u=r,go= ' + self.files
             run(self.cmd.split(),check=True);
+
             self.cmd = 'cp -av ' + self.files + ' ' + self.backupdir
-            run(self.cmd.split())
+            run(self.cmd.split(),check=True)
+
         finally:
-#            print(self.__dict__)
-            for i in self.__dict__.values():
-                if isinstance(i,io.TextIOWrapper):
-                    i.close()
             if ( os.access(self.tmpfile,os.R_OK) and os.access(self.tmpfile,os.W_OK) ):
                 os.unlink(self.tmpfile)
                 print('finally')
-
-    def askpass(self,scriptfile,passascfile):
-        os.chmod(scriptfile,0o700)
-        self.tmpfh = open(scriptfile,'w')
-        self.script = ("""\
-        #!/bin/env /bin/bash
-        builtin declare -x GPG_TTY=%s
-        /bin/gpg --decrypt --no-verbose --quiet %s""")
-        print( self.script.replace("    ","") % (self.curtty,passascfile),
-        file=self.tmpfh)
-        self.tmpfh.close()
 
     def usage(self,option=1):
         if option in self.message:
@@ -111,6 +109,7 @@ class Conagent:
                 self.proc = run(['ssh-add','-L'],stdout=PIPE,text=True,check=True)
             except CalledProcessError as e:
                 if e.returncode == 2:
+                    print(e)
                     return
             self.cache = self.proc.stdout.rstrip('\n').split()
             self.fcontent = {}
@@ -130,7 +129,10 @@ class Conagent:
                 os.environ['SSH_ASKPASS'] = self.tmpfile 
                 self.cmd = 'gpg --no-tty --decrypt --no-verbose --output ' \
                 + self.tmpfile + ' --quiet ' + self.passasc
-                print(self.cmd)
+                run(self.cmd.split(),check=True)
+                with open(self.tmpfile,'r') as self.tmpfh:
+                    print(self.tmpfh.read())
+                os.unlink(self.tmpfile)
         finally:
             print('finally')
             with open('/tmp/agentlog','w') as self.logfh:
