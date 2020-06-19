@@ -50,6 +50,11 @@ conagent.substitute()
     signal='RETURN HUP INT TERM EXIT'
     \builtin \source <($cat<<-SUB
 
+agent.addkeys()
+{
+    conagent.agent.start
+    $agent -a
+}
 agent.py.install()
 {
     $cp src/conagent.py $bindir/agent

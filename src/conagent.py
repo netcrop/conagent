@@ -18,11 +18,7 @@ class Conagent:
         self.homedir = os.environ.get('HOME') + '/'
         self.sshdir = self.homedir + '.ssh/'
         self.tmpfile = '/var/tmp/' + str(random.randint(10000,99999))
-        self.date = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
-        self.keyfile = self.sshdir + self.username + '_' + self.hostname + '_' + \
-        self.keytype + '_' + self.date
-        self.pubkey = self.keyfile + '.pub'
-        self.passasc = self.keyfile + '_pass.asc'
+
     def genkey(self):
         try:
             if len(self.argv[0]) != 3:
@@ -31,6 +27,11 @@ class Conagent:
             if not (os.access(self.backupdir,os.X_OK) 
             and os.access(self.backupdir,os.W_OK)):
                 self.usage(self.argv[0][1])
+            self.date = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
+            self.keyfile = self.sshdir + self.username + '_' + self.hostname + '_' + \
+            self.keytype + '_' + self.date
+            self.pubkey = self.keyfile + '.pub'
+            self.passasc = self.keyfile + '_pass.asc'
             self.checktty()
             run(['mkdir','-p',self.sshdir],check=True)
             self.tmpfh = open(self.tmpfile,'w+')
@@ -68,10 +69,21 @@ class Conagent:
                 os.unlink(self.tmpfile)
                 print('finally')
 
+    def askpass(self,scriptfile,passascfile):
+        os.chmod(scriptfile,0o700)
+        self.tmpfh = open(scriptfile,'w')
+        self.script = ("""\
+        #!/bin/env /bin/bash
+        builtin declare -x GPG_TTY=%s
+        /bin/gpg --decrypt --no-verbose --quiet %s""")
+        print( self.script.replace("    ","") % (self.curtty,passascfile),
+        file=self.tmpfh)
+        self.tmpfh.close()
+
     def usage(self,option=1):
-        try:
+        if option in self.message:
             print(self.message[option].replace("@","\n    "))
-        except KeyError:
+        else:
             for key in self.message:
                 print(key,self.message[key].replace("@","\n    "))
         exit()
@@ -85,16 +97,47 @@ class Conagent:
             exit()
 
     def addkey(self):
-        if len(self.argv[0]) == 3:
-            self.sshdir = self.argv[0][2]
-        if not (os.access(self.sshdir,os.X_OK) and os.access(self.sshdir,os.W_OK)):
-            self.usage(self.argv[0][1])
-        self.checktty()
-        os.environ['TTY'] = self.curtty
-        print(os.environ.get('TTY'))
+        try:
+            if len(self.argv[0]) == 3:
+                self.sshdir = self.argv[0][2]
+            if not (os.access(self.sshdir,os.X_OK) and os.access(self.sshdir,os.W_OK)):
+                self.usage(self.argv[0][1])
+            self.checktty()
+            os.environ['GPG_TTY'] = self.curtty
+            os.environ['DISPLAY']=':0'
+            self.files = glob.glob(self.sshdir + '*_*_*_*[0-9]')
+            self.returncode = 0
+            try:
+                self.proc = run(['ssh-add','-L'],stdout=PIPE,text=True,check=True)
+            except CalledProcessError as e:
+                if e.returncode == 2:
+                    return
+            self.cache = self.proc.stdout.rstrip('\n').split()
+            self.fcontent = {}
+            self.ccontent = {}
+            for i in self.files:
+                with open(i + '.pub','r') as self.tmpfh:
+                    self.fcontent[self.tmpfh.read().split()[1]] = i
+            for i in self.cache:
+                self.ccontent[i] = 1
+            for i in self.fcontent:
+                if i in self.ccontent:
+                    continue
+                self.passasc = self.fcontent[i] + '_pass.asc'
+                if not os.access(self.passasc,os.R_OK):
+                    continue
+                self.tmpfile = '/var/tmp/' + str(random.randint(10000,99999))
+                os.environ['SSH_ASKPASS'] = self.tmpfile 
+                self.cmd = 'gpg --no-tty --decrypt --no-verbose --output ' \
+                + self.tmpfile + ' --quiet ' + self.passasc
+                print(self.cmd)
+        finally:
+            print('finally')
+            with open('/tmp/agentlog','w') as self.logfh:
+                print(self.__dict__,file=self.logfh)
 if __name__ == '__main__':
     agent = Conagent(sys.argv)
-    try:
+    if agent.argv[0][1] in agent.option:
         agent.option[agent.argv[0][1]]()
-    except KeyError:
+    else:
         agent.usage()
