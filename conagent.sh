@@ -50,10 +50,10 @@ conagent.substitute()
     signal='RETURN HUP INT TERM EXIT'
     \builtin \source <($cat<<-SUB
 
-agent.addkeys()
+conagent.addkeys()
 {
     conagent.agent.start
-    $agent -a
+    $agent -a \${@}
 }
 agent.py.install()
 {
@@ -189,7 +189,7 @@ SSHLOADKEYS
     done
     conagent.addkey.delocate
 }
-conagent.addkeys()
+_conagent.addkeys()
 {
     \builtin \trap "conagent.addkey.delocate" SIGHUP SIGTERM SIGINT
     declare -A Addkey=(

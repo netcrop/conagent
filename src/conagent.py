@@ -5,11 +5,17 @@ class Conagent:
     def __init__(self,*argv):
         self.message = {'-h':'print this help message.',
         '-g':'[backup dir]: generate new key and copy to user defined backup dir.',
-        '-a':'[ssh dir] add existing keys from user defined dir@default: $HOME/.ssh/ into ssh-agent cache'}
-        if len(argv[0]) == 1:
-            self.usage()
+        '-a':'[ssh dir] add existing keys from user defined dir@default:' +
+        '$HOME/.ssh/ into ssh-agent cache',
+        '-ks':'[host] [opt:user] [opt:port] stop connection.' +
+        '@optional defaults User=$USER and Port refers to ssh_config'}
         self.argv = argv
-        self.option = { '-h':self.usage ,'-g':self.genkey, '-a':self.addkey }
+        self.args = argv[0]
+        self.argc = len(self.args)
+        if self.argc == 1:
+            self.usage()
+        self.option = { '-h':self.usage ,'-g':self.genkey, '-a':self.addkey,
+        '-ks':self.killsocks }
         self.keytype = 'rsa'
         self.hostname = socket.gethostname()
         self.uid = os.getuid()
@@ -20,12 +26,12 @@ class Conagent:
         self.tmpfile = '/var/tmp/' + str(random.randint(10000,99999))
  
     def genkey(self):
-        if len(self.argv[0]) != 3:
-            self.usage(self.argv[0][1])
-        self.backupdir = self.argv[0][2] 
+        if self.argc != 3:
+            self.usage(self.args[1])
+        self.backupdir = self.args[2] 
         if not (os.access(self.backupdir,os.X_OK) 
         and os.access(self.backupdir,os.W_OK)):
-            self.usage(self.argv[0][1])
+            self.usage(self.args[1])
         self.tmpfile = '/var/tmp/' + str(random.randint(10000,99999))
         self.date = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
         self.keyfile = self.sshdir + self.username + '_' + self.hostname + '_' + \
@@ -46,15 +52,7 @@ class Conagent:
                 self.cmd = 'gpg --symmetric --no-verbose --quiet --armor'
                 run(self.cmd.split(),stdin=self.tmpfh,stdout=self.passfh,check=True)
 
-        self.script = ("""\
-        #!/bin/env /bin/bash
-        builtin declare -x GPG_TTY=%s
-        /bin/gpg --decrypt --no-verbose --quiet %s""")
-
-        with open(self.tmpfile,'w') as self.tmpfh: 
-            print( self.script.replace("    ","") %
-            (self.curtty,self.passasc),file=self.tmpfh)
-
+        askpass()
         os.chmod(self.tmpfile,0o700)
         os.environ['DISPLAY'] = ':0'
         os.environ['SSH_ASKPASS'] = self.tmpfile
@@ -98,21 +96,19 @@ class Conagent:
             exit()
 
     def addkey(self):
-        if len(self.argv[0]) == 3:
-            self.sshdir = self.argv[0][2]
+        if self.argc == 3:
+            self.sshdir = self.args[2]
         if not (os.access(self.sshdir,os.X_OK) and os.access(self.sshdir,os.W_OK)):
-            self.usage(self.argv[0][1])
+            self.usage(self.args[1])
         self.checktty()
         os.environ['GPG_TTY'] = self.curtty
         os.environ['DISPLAY']=':0'
         self.files = glob.glob(self.sshdir + '*_*_*_*[0-9]')
-        self.returncode = 0
         try:
             self.proc = run(['ssh-add','-L'],stdout=PIPE,text=True,check=True)
         except CalledProcessError as e:
             if e.returncode == 2:
-                print(e)
-                return
+                return e.returncode
         self.cache = self.proc.stdout.rstrip('\n').split()
         self.fcontent = {}
         self.ccontent = {}
@@ -138,12 +134,30 @@ class Conagent:
                 run(['ssh-add',self.fcontent[i]],check=True,stdin=self.nullfh)
             os.unlink(self.tmpfile)
 
+    def killsocks(self):
+        self.port = ''
+        if self.argc < 3:
+            self.usage(self.args[1])
+        if self.argc >= 3:
+            self.host = self.args[2]
+        if self.argc >= 4:
+            self.username = self.args[3]
+        if self.argc >= 5:
+            self.port = ' -o port=' + self.args[4]
+        self.userhost = self.username + '@' + self.host
+        self.cmd = 'ssh -F ' + self.sshdir + 'ssh_config -fTN -O stop '\
+        + self.userhost + self.port
+        try:
+            run(self.cmd.split(),check=True)
+        except CalledProcessError as e:
+            return e.returncode 
+
 if __name__ == '__main__':
     agent = Conagent(sys.argv)
-    if agent.argv[0][1] not in agent.option:
+    if agent.args[1] not in agent.option:
         agent.usage()
     try:
-        agent.option[agent.argv[0][1]]()
+        agent.option[agent.args[1]]()
     finally:
         print('finally')
         if ( os.access(agent.tmpfile,os.R_OK) and os.access(agent.tmpfile,os.W_OK) ):
