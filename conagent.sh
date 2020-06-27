@@ -15,25 +15,17 @@ conagent.substitute()
     )
     cmdlist="${Devlist[@]} $cmdlist"
     for cmd in $cmdlist;do
-        i="$(\builtin type -fp $cmd)"
-        if [[ -z $i ]];then
-            if [[ -z ${Devlist[$cmd]} ]];then
-                    reslist+=" $cmd"
-            else
-                    devlist+=" $cmd"
-            fi
-        fi
+        i=($(\builtin type -fp $cmd))
+        [[ -z $i ]] && {
+            [[ -z ${Devlist[$cmd]} ]] && reslist+=" $cmd" || devlist+=" $cmd"
+        }
         \builtin eval "${cmd//-/_}=${i:-:}"
     done
-    [[ -z $reslist ]] ||\
-    { 
-        \builtin printf "%s\n" \
-        "$FUNCNAME Required: $reslist"
+    [[ -n $reslist ]] && { 
+        \builtin printf "%s\n" "$FUNCNAME Required: $reslist"
         return
     }
-    [[ -z $devlist ]] ||\
-    \builtin printf "%s\n" \
-    "$FUNCNAME Optional: $devlist"
+    [[ -n $devlist ]] && \builtin printf "%s\n" "$FUNCNAME Optional: $devlist"
 
     perl_version="$($perl -e 'print $^V')"
     vendor_perl=/usr/share/perl5/vendor_perl/
@@ -50,15 +42,104 @@ conagent.substitute()
     signal='RETURN HUP INT TERM EXIT'
     \builtin \source <($cat<<-SUB
 
+conagent.send()
+{
+    local cmd="$env $ssh -T -F \${HOME}/.ssh/ssh_config "
+    local host="\${1:?[host][remote cmd/fun] opt:[cmd/fun args][opt port][opt user]}"
+    local funname="\${2:-hostname} "
+    local args="\${3}"
+    local port=" -o port=\${4:-${port}}"
+    local user="\${5:-${user}}"
+    declare -a Host=(\$($egrep -w "\$host" /etc/hosts))
+    [[ "\${Host[0]}" =~ : ]] && cmd="\${cmd}-6 "
+#    set -x
+    local funbody=\$(\builtin declare -F \$remotecmd >/dev/null &&\
+    \builtin declare -f \$remotecmd|$sed -E "s;[\$];\\\\\$;g")
+ 
+    \${cmd}${user}@\${host}\${port}<<-AGENTSEND
+    \${funbody}
+    \$funname \${args}
+AGENTSEND
+#    set +x
+}
+conagent.auth()
+{
+    local keycontent=\${1:?[keycontent]}
+    local key i oifs=$IFS authorizedkey="\$HOME/.ssh/authorized_keys"
+    [[ -r \$authorizedkey ]] || > \$authorizedkey
+    chmod u=rw,go= \$authorizedkey
+    declare -A Hash
+    local fcontent="\$(<\$authorizedkey)"
+    for i in \$fcontent;do
+        Hash["\${i}"]=1
+    done
+    [[ -r "\$keycontent" ]] && keycontent="\$(< \$keycontent)"
+    i="\${keycontent#* }"
+    [[  -n "\${Hash["\${i% *}"]}" ]] && return
+    \builtin printf "%s\n%s" "\${fcontent}" "\$keycontent" > \$authorizedkey
+    chmod u=r,go= \$authorizedkey
+}
+conagent.sendkey()
+{
+    \builtin shopt -s extdebug
+    declare -A Arg=(
+    [cmd]="$env TERM="xterm-256color" $ssh -T -F \${HOME}/.ssh/ssh_config "
+    [pubkey]="\${1:?[e.g:key.pub][host][port|.][user|.][verbose|.][login keyfile]}"
+    [filetype]="\$($file --brief \${Arg[pubkey]})"
+    [host]="@\${2:?[host][port|.][user|.][verbose|.][login keyfile]}"
+    [port]="\${3:-${port}}"
+    [port]=" -o port=\${Arg[port]/./${port}}"
+    [user]="\${4:-${user}}"
+    [user]="\${Arg[user]/./${user}}"
+    [verbose]=\${5:+" -vvv "}
+    [keyfile]="\${6:+" -i \$6 "}"
+    )
+    declare -a Host=(\$($egrep -w "\${Arg[host]/@/}" /etc/hosts|$egrep -v "#"))
+    [[ "\${Host[0]}" =~ : ]] && Arg[cmd]="\${Arg[cmd]}-6 " 
+    [[ X"\${Arg[filetype]}" =~ X"OpenSSH" &&\
+    "\${Arg[filetype]}" =~ "public key" ]] || {
+        \builtin printf "%s\n" "invalid pubkey."
+        return 1
+    }
+    \${Arg[cmd]}\${Arg[verbose]}\${Arg[keyfile]}\${Arg[user]}\${Arg[host]}\${Arg[port]} <<-AGENTSENDKEY
+#    $cat <<-SENDKEY # Keep this for testing purpose.
+$(\builtin declare -f conagent.auth|$sed -E "s;[\$];\\\\\$;g")
+conagent.auth "\$(<\${Arg[pubkey]})"
+AGENTSENDKEY
+}
+conagent()
+{
+    $agent -j \${@}
+}
+conagent.socks()
+{
+    $agent -socks \${@}
+}
+conagent.agent.start()
+{
+    $agent -s 
+    \builtin test -r ~/.ssh/\$HOSTNAME-ssh && \builtin source ~/.ssh/\$HOSTNAME-ssh
+}
+conagent.kill.socks()
+{
+    $agent -ks \${@}
+}
 conagent.addkeys()
 {
-    conagent.agent.start
     $agent -a \${@}
+    \builtin test -r ~/.ssh/\$HOSTNAME-ssh && \builtin source ~/.ssh/\$HOSTNAME-ssh
 }
 agent.py.install()
 {
-    $cp src/conagent.py $bindir/agent
-    $chmod u=rwx $bindir/agent
+    [[ \${PWD##*/} =~ conagent ]] || return 
+    local debugging=\${1:-0}
+    [[ \$debugging =~ [[:digit:]] ]] || debugging=1
+    $sed -e "s;CONAGENTLOCALPORT1;${conagentlocalport1};" \
+    -e "s;CONAGENTREMOTEPORT1;${conagentremoteport1};" \
+    -e "s;CONAGENTREMOTEPORT;${port};" \
+    -e "s;DEBUGGING;\${debugging};" \
+    src/conagent.py > $bindir/agent
+    $chmod u=rwx,go=rx $bindir/agent
 }
 conagent.changepass()
 {
@@ -128,7 +209,7 @@ SSHOLDKEY
 }
 conagent.loadkeys()
 {
-    conagent.agent.start
+    _conagent.agent.start
     declare -A Addkey=(
     [homedir]=\${1:-"\${HOME}/.ssh"}
     [debug]=\${2}
@@ -161,7 +242,8 @@ SSHLOADKEYS
         [[ -r \${Addkey[gpgpass]} ]] && $shred -fu \${Addkey[gpgpass]}
         builtin unset SSH_ASKPASS
         builtin declare -x DISPLAY=\${Addkey[display]}
-        builtin unset -f conagent.genkey.delocate conagent.mutation
+        builtin unset -f conagent.genkey.delocate conagent.mutation \
+        conagent.addkey.delocate
         builtin trap - SIGHUP SIGTERM SIGINT
         builtin set +o xtrace
     }
@@ -216,7 +298,7 @@ _conagent.addkeys()
         conagent.addkey.delocate   
         return
     fi
-    conagent.agent.start
+    _conagent.agent.start
     declare -a Key=(\$($find \${Addkey[homedir]} -name "*_*_*_*" \
     ! -name "*.pub" ! -name "*.asc"))
     declare -A Hash=()
@@ -328,7 +410,7 @@ SSHGENKEY
     $chmod u=r,go= \${Genkey[keyfile]} \${Genkey[keyfile]}.pub
     [[ -r \${Genkey[dir]} ]] && $cp \${Genkey[keyfile]}* \${Genkey[dir]}
 }
-conagent.agent.start()
+_conagent.agent.start()
 {
     declare -a Arg=(\$($ps -C ssh-agent -o pid= -o user=|$egrep $user))
     local sshenv=\$HOME/.ssh/\${HOSTNAME}-ssh
@@ -349,7 +431,7 @@ conagent.agent.start()
     $ssh_agent | $head -n 2 > \$sshenv
     \builtin \source \$sshenv
 }
-conagent.sendkey()
+_conagent.sendkey()
 {
     \builtin shopt -s extdebug
     declare -A Arg=(
@@ -544,7 +626,7 @@ scp.get.remote()
     fi
     \${cmd}\${verbose}\${port} ${user}@\${host}\${source} \${target}
 }
-conagent()
+_conagent()
 {
     local cmd="$env TERM=xterm-256color $ssh -F \${HOME}/.ssh/ssh_config "
     local host="\${1:?[host][port|.][user|.][verbose|.]}"
@@ -557,7 +639,7 @@ conagent()
     local verbose=\${4:+" -vvv "}
     \${cmd}\${verbose}\${keyfile}\${user}@\${host}\${port}
 }
-conagent.kill.socks()
+_conagent.kill.socks()
 {
 #    set -o xtrace
     local help="[host][user][port]"
@@ -588,7 +670,7 @@ conagent.tunnel()
     -Llocalhost:\${localport}:\${remotehost}:\${remoteport} -N &
     set +o xtrace
 }
-conagent.socks()
+_conagent.socks()
 {
     local cmd="$ssh -F \${HOME}/.ssh/ssh_config -fTN "
     local usage="\${FUNCNAME}:[remote host][remote port|.][user|.][local socksport|.][keyfile]"
@@ -612,6 +694,10 @@ conagent.socks()
 conagent.lsof()
 {
     $lsof -i
+}
+conagent.agent.unsetenv()
+{
+    \builtin \unset SSH_AGENT_PID SSH_AUTH_SOCK;
 }
 conagent.agent.kill()
 {
@@ -669,7 +755,8 @@ conagent.myip()
     $awk '{print \$NF}'|$cut -d':' -f1
 #    set +o xtrace
 }
-conagent.send()
+
+_conagent.send()
 {
 #    set -o xtrace
     local cmd="$env $ssh -T -F \${HOME}/.ssh/ssh_config "

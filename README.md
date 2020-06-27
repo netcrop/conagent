@@ -1,7 +1,7 @@
 # Conagent
 Conagent is a Openssh key managment script, written in Bash/Python3.
 
-  It can be used to create and distribute Openssh keys across virtual machines.
+  Create, distribute and manage Openssh keys across virtual machines and dockers.
 ## Install, maintain and uninstall
 
 * For linux/unix system:  
@@ -9,24 +9,32 @@ Conagent is a Openssh key managment script, written in Bash/Python3.
 required commands and packages:
 Bash version 4.4+
 Python 3.8+
+gnupg 2.2+
 coreutils
 openssh
 sudo
-gnupg
 ```
 ## Using conagent
 ```
-node1@eva > cd conagent/
-node1@eva > source conagent.sh
-node1@eva > conagent.genkey sample/ ${USER} ${HOSTNAME} rsa 1
-node1@eva > conagent.changepass sample/eva_node1_rsa_20190208091201 1
-node1@eva > conagent.addkey
-node1@eva > conagent.sendkey sample/eva_node1_rsa_20190208091201 node2
+> cd conagent/
+> source conagent.sh
+> agent.py.install 
+# Create new key and save in backup dir
+> conagent.genkey backupdir/
+> conagent.changepass backupdir/eva_node_rsa_20190208091201
+# Add all keys inside ~/.ssh/ to ssh-agent cache
+# And export SSH_AGENT_PID SSH_AUTH_SOCK to current interactive shell session
+> conagent.addkey
+# Send public key to remote host and append to ~/.ssh/authorized_keys  
+> conagent.sendkey sample/eva_node_rsa_20190208091201.pub [hostname]
+# Establish localhost:socket and remote-host:socket
+> conagent.socks [hostname] opt: [remote port] [remote user] [local port] 
 ```
 ## For developers
-
-We use rolling releases.
-
+```
+# Enable debugging flag
+> agent.py.install 1
+```
 ## Reporting a bug and security issues
 
 github.com/netcrop/conagent/pulls
