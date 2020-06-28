@@ -1,4 +1,4 @@
-#!/bin/env -S PATH=/usr/local/bin:/usr/bin /bin/python3.8 -I
+#!/bin/env -S PATH=/usr/local/bin:/usr/bin python3 -I
 import re,tempfile,resource,glob,io,subprocess,sys,os,socket,getpass,random,datetime
 class Conagent:
     def __init__(self,*argv):

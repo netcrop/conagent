@@ -42,6 +42,36 @@ conagent.substitute()
     signal='RETURN HUP INT TERM EXIT'
     \builtin \source <($cat<<-SUB
 
+conagent.sendkey()
+{
+    local cmd="$env $ssh -T -F \${HOME}/.ssh/ssh_config "
+    local host="\${1:?[host][keyfile] opt:[port][user]}"
+    local keycontent="\${2}"
+    local port=" -o port=\${3:-${port}}"
+    local user="\${4:-${user}}"
+    declare -a Host=(\$($egrep -w "\$host" /etc/hosts))
+    [[ "\${Host[0]}" =~ : ]] && cmd="\${cmd}-6 "
+    \builtin test -r "\$keycontent" || {
+        \builtin echo "inaccessible key: \$keycontent"
+        return 1
+    }
+    $file -b \$keycontent|$egrep -q "public key" || {
+        \builtin printf "%s\n" "invalid pubkey."
+        return 1
+    }
+    keycontent="\$(< \$keycontent)"
+#    set -x
+    \builtin declare -F conagent.auth >/dev/null || {
+        \builtin echo "missing function: conagent.auth"
+    }
+    local funbody=\$(\builtin declare -f conagent.auth|$sed -E "s;[\$];\\\\\$;g")
+ 
+    \${cmd}${user}@\${host}\${port}<<-AGENTSEND
+    \${funbody}
+    conagent.auth "\${keycontent}"
+AGENTSEND
+#    set +x
+}
 conagent.send()
 {
     local cmd="$env $ssh -T -F \${HOME}/.ssh/ssh_config "
@@ -78,34 +108,6 @@ conagent.auth()
     [[  -n "\${Hash["\${i% *}"]}" ]] && return
     \builtin printf "%s\n%s" "\${fcontent}" "\$keycontent" > \$authorizedkey
     chmod u=r,go= \$authorizedkey
-}
-conagent.sendkey()
-{
-    \builtin shopt -s extdebug
-    declare -A Arg=(
-    [cmd]="$env TERM="xterm-256color" $ssh -T -F \${HOME}/.ssh/ssh_config "
-    [pubkey]="\${1:?[e.g:key.pub][host][port|.][user|.][verbose|.][login keyfile]}"
-    [filetype]="\$($file --brief \${Arg[pubkey]})"
-    [host]="@\${2:?[host][port|.][user|.][verbose|.][login keyfile]}"
-    [port]="\${3:-${port}}"
-    [port]=" -o port=\${Arg[port]/./${port}}"
-    [user]="\${4:-${user}}"
-    [user]="\${Arg[user]/./${user}}"
-    [verbose]=\${5:+" -vvv "}
-    [keyfile]="\${6:+" -i \$6 "}"
-    )
-    declare -a Host=(\$($egrep -w "\${Arg[host]/@/}" /etc/hosts|$egrep -v "#"))
-    [[ "\${Host[0]}" =~ : ]] && Arg[cmd]="\${Arg[cmd]}-6 " 
-    [[ X"\${Arg[filetype]}" =~ X"OpenSSH" &&\
-    "\${Arg[filetype]}" =~ "public key" ]] || {
-        \builtin printf "%s\n" "invalid pubkey."
-        return 1
-    }
-    \${Arg[cmd]}\${Arg[verbose]}\${Arg[keyfile]}\${Arg[user]}\${Arg[host]}\${Arg[port]} <<-AGENTSENDKEY
-#    $cat <<-SENDKEY # Keep this for testing purpose.
-$(\builtin declare -f conagent.auth|$sed -E "s;[\$];\\\\\$;g")
-conagent.auth "\$(<\${Arg[pubkey]})"
-AGENTSENDKEY
 }
 conagent()
 {

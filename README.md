@@ -8,7 +8,7 @@ Conagent is a Openssh key managment script, written in Bash/Python3.
 ```
 required commands and packages:
 Bash version 4.4+
-Python 3.8+
+Python 3+
 gnupg 2.2+
 coreutils
 openssh
