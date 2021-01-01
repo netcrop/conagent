@@ -1,5 +1,6 @@
 #!/bin/env -S PATH=/usr/local/bin:/usr/bin python3 -I
-import re,tempfile,resource,glob,io,subprocess,sys,os,socket,getpass,random,datetime
+import re,tempfile,resource,glob,io,subprocess,sys
+import os,socket,getpass,random,datetime
 class Conagent:
     def __init__(self,*argv):
         self.message = {'-h':' print this help message.',
@@ -24,7 +25,7 @@ class Conagent:
         '-socks':self.socks, '-j':self.join, '-checktty':self.checktty,
         '-sendkey':self.sendkey }
 
-        self.keytype = 'rsa'
+        self.keytype = 'ed25519'
         self.hostname = socket.gethostname()
         self.uid = os.getuid()
         self.username = getpass.getuser()
@@ -85,6 +86,7 @@ class Conagent:
         port = 'CONAGENTREMOTEPORT1'
         remoteuser = self.username
         keyfile = ''
+        ipversion = ' '
         if self.argc < 3: self.usage(self.args[1])
         if self.argc >= 3: remotehost = self.args[2] 
         if self.argc >= 4: port = self.args[3]
@@ -96,9 +98,13 @@ class Conagent:
         if proc != None:
             for i in proc.stdout.split():
                 if i.find(socksport) != -1: return
+        cmd = 'ping -q -n -c 1 ' + remotehost
+        proc = self.run(cmd=cmd,stdout=subprocess.PIPE,exit_errorcode=-1)
+        if proc != None:
+            if proc.stdout.split()[1].find('::') != -1: ipversion = ' -6 '
         port = ' -o port=' + port
         socksport = ' -D ' + socksport
-        cmd = 'ssh -F ' + self.homedir + '.ssh/ssh_config -fTN '
+        cmd = 'ssh -F ' + self.homedir + '.ssh/ssh_config -fTN ' + ipversion
         cmd += keyfile + ' ' + socksport + ' ' + remoteuser +\
         '@' + remotehost + port
         self.run(cmd=cmd)
@@ -207,7 +213,7 @@ class Conagent:
         else:
             for key in self.message:
                 print(key,self.message[key].replace("@","\n    "))
-        exit()
+        exit(1)
 
     def checktty(self):
         proc = self.run(cmd='tty',stdout=subprocess.PIPE,exit_errorcode=-1)
@@ -282,7 +288,7 @@ class Conagent:
             parentstderr = parentproc.communicate()[1].rstrip('\n')
             if parentstderr != '':
                 print(parentstderr)
-                exit()
+                exit(1)
         self.askpass(infile=self.passasc, passfile=self.pssfh.name,
         outfile=self.askpassfh.name)
         os.chmod(self.askpassfh.name,0o700)
@@ -329,7 +335,7 @@ class Conagent:
             self.testfh.write('big')
         proc = self.run(cmd='cat',stdout=subprocess.PIPE,infile=self.testfh.name)
         if proc != None:print(proc.stdout)
-        proc = self.run(stdout=subprocess.PIPE,infile='/etc/hostname')
+        proc = self.run(cmd='cat',stdout=subprocess.PIPE,infile='/etc/hostname')
         if proc != None:print(proc.stdout)
         self.run(cmd='date -u')
 
@@ -358,10 +364,10 @@ class Conagent:
             if exit_errorcode == '':
                 if e.returncode != 0:
                     self.debug(info='end 3: ',emit=emit)
-                    exit()
+                    exit(1)
             elif e.returncode == exit_errorcode:
                 self.debug(info='end 4',emit=emit)
-                exit()
+                exit(1)
             return None
 
     def debug(self,info='',outfile='',emit=''):
@@ -373,7 +379,10 @@ class Conagent:
 if __name__ == '__main__':
     agent = Conagent(sys.argv)
     if agent.args[1] not in agent.option: agent.usage()
-    try: agent.option[agent.args[1]]()
+    try:
+        agent.option[agent.args[1]]()
+    except KeyboardInterrupt:
+        agent.debug(info='user ctrl-C')
     finally:
         agent.debug(info='session finally end')
         for key,value in agent.__dict__.items():

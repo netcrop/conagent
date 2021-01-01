@@ -6,7 +6,7 @@ conagent.substitute()
     basename cat id cut bash mktemp egrep date env mv w
     cp chmod ln chown rm touch ssh-agent ps head mkdir chattr lsattr
     pwgen sha1sum gpg ssh-add find file tail tr ss awk sleep ping
-    stat scp groups ssh-keyscan ssh-keygen'
+    stat scp groups ssh-keyscan ssh-keygen umount'
 
     declare -A Devlist=(
     [sshfs]='sshfs'
@@ -40,8 +40,14 @@ conagent.substitute()
     conagentlocalport1=${CONAGENTLOCALPORT1}
     sshconfig=${HOME}/.ssh/ssh_config
     signal='RETURN HUP INT TERM EXIT'
+    seed=\${RANDOM}\${RANDOM}\${RANDOM}
     \builtin \source <($cat<<-SUB
 
+conagent.listkeys()
+{
+    $ssh-add -E md5 -l
+    $ssh-add -E sha256 -l
+}
 conagent.sendkey()
 {
     local cmd="$env $ssh -T -F \${HOME}/.ssh/ssh_config "
@@ -76,15 +82,15 @@ conagent.send()
 {
     local cmd="$env $ssh -T -F \${HOME}/.ssh/ssh_config "
     local host="\${1:?[host][remote cmd/fun] opt:[cmd/fun args][opt port][opt user]}"
-    local funname="\${2:-hostname} "
+    local funname="\${2} "
     local args="\${3}"
     local port=" -o port=\${4:-${port}}"
     local user="\${5:-${user}}"
     declare -a Host=(\$($egrep -w "\$host" /etc/hosts))
     [[ "\${Host[0]}" =~ : ]] && cmd="\${cmd}-6 "
 #    set -x
-    local funbody=\$(\builtin declare -F \$remotecmd >/dev/null &&\
-    \builtin declare -f \$remotecmd|$sed -E "s;[\$];\\\\\$;g")
+    local funbody=\$(\builtin declare -F \$funname >/dev/null &&\
+    \builtin declare -f \$funname|$sed -E "s;[\$];\\\\\$;g")
  
     \${cmd}${user}@\${host}\${port}<<-AGENTSEND
     \${funbody}
@@ -109,7 +115,7 @@ conagent.auth()
     \builtin printf "%s\n%s" "\${fcontent}" "\$keycontent" > \$authorizedkey
     chmod u=r,go= \$authorizedkey
 }
-conagent()
+agent()
 {
     $agent -j \${@}
 }
@@ -433,75 +439,6 @@ _conagent.agent.start()
     $ssh_agent | $head -n 2 > \$sshenv
     \builtin \source \$sshenv
 }
-_conagent.sendkey()
-{
-    \builtin shopt -s extdebug
-    declare -A Arg=(
-    [cmd]="$env TERM="xterm-256color" $ssh -T -F \${HOME}/.ssh/ssh_config "
-    [pubkey]="\${1:?[e.g:key.pub][host][port|.][user|.][verbose|.][login keyfile]}"
-    [filetype]="\$($file --brief \${Arg[pubkey]})"
-    [host]="@\${2:?[host][port|.][user|.][verbose|.][login keyfile]}"
-    [port]="\${3:-${port}}"
-    [port]=" -o port=\${Arg[port]/./${port}}"
-    [user]="\${4:-${user}}"
-    [user]="\${Arg[user]/./${user}}"
-    [verbose]=\${5:+" -vvv "}
-    [keyfile]="\${6:+" -i \$6 "}"
-    )
-    declare -a Host=(\$($egrep -w "\${Arg[host]/@/}" /etc/hosts|$egrep -v "#"))
-    [[ "\${Host[0]}" =~ : ]] && Arg[cmd]="\${Arg[cmd]}-6 " 
-    [[ X"\${Arg[filetype]}" =~ X"OpenSSH" &&\
-    "\${Arg[filetype]}" =~ "public key" ]] || return
-    \${Arg[cmd]}\${Arg[verbose]}\${Arg[keyfile]}\${Arg[user]}\${Arg[host]}\${Arg[port]} <<-SENDKEY
-#    $cat <<-SENDKEY # Keep this for testing purpose.
-conagent.sendkey.substitute()
-{
-# set -o xtrace # Keep this for testing purpose.
-local cmd i cmdlist='cat cut mv chmod rm touch'
-for cmd in \\\$cmdlist;do
-    i="\\\$(builtin type -fp \\\$cmd 2>/dev/null)"
-    [[ -z \\\${i} ]] && return 
-    \builtin eval "\\\${cmd//-/_}=\\\${i}"
-done
-\builtin \source <(cat<<-REMOTESENDKEY
-conagent.authorizedkey()
-{
-    builtin shopt -u extdebug
-    local keycontent=\\\\\\\${1:?[keycontent]}
-    local i authorizedkey=\\\\\\\${2:-\\\\\\\$HOME/.ssh/authorized_keys}
-    local tmpfile=/var/tmp/\\\\\\\${RANDOM}
-    \builtin \trap "conagent.genkey.delocate" $signal
-    conagent.genkey.delocate()
-    {
-        [[ -r \\\\\\\${tmpfile} ]] && \\\$rm -f \\\\\\\$tmpfile
-        builtin trap - $signal
-        builtin unset -f conagent.genkey.delocate
-        builtin unset -f conagent.authorizedkey
-        builtin shopt -u extdebug
-        builtin set +o xtrace
-    }
-    \\\$touch \\\\\\\$authorizedkey
-    \\\$chmod u=rw,go= \\\\\\\$authorizedkey
-    declare -A Hash
-    for i in \\\\\\\$(\\\$cut -d' ' -f2 \\\\\\\$authorizedkey);do
-        Hash["\\\\\\\$i"]=1;
-    done
-    [[ -r "\\\\\\\$keycontent" ]] &&\
-        keycontent="\\\\\\\$(\\\$cat \\\\\\\$keycontent)"
-    i="\\\\\\\$(\\\$cut -d' ' -f2 <<<"\\\\\\\$keycontent")"
-    [[ X\\\\\\\${Hash["\\\\\\\$i"]} == X1 ]] && return
-    \\\$cat \\\\\\\$authorizedkey - <<<\\\\\\\$keycontent > \\\\\\\${tmpfile}
-    \\\$mv -f \\\\\\\$tmpfile \\\\\\\$authorizedkey
-    \\\$chmod u=r,go= \\\\\\\$authorizedkey
-}
-REMOTESENDKEY
-    )
-}
-conagent.sendkey.substitute
-builtin unset -f conagent.sendkey.substitute
-conagent.authorizedkey "\$(<\${Arg[pubkey]})"
-SENDKEY
-}
 conagent.authorizedkey()
 {
     local keycontent=\${1:?[keycontent: \"\\\$(<key.pub)\"][optional \$HOME/.ssh/authorized_keys][optional debug flag: 0|1]}
@@ -583,8 +520,10 @@ conagentd.reconfig()
     \builtin printf "%s\n" "ListenAddress \${listenip1}" \
     >> \$HOME/.ssh/sshd_config
     $chmod ug=r,o= \$HOME/.ssh/sshd_config
-    $sudo $rm -f /etc/ssh/sshd_config
+    $sudo $mv -f /etc/ssh/sshd_config /etc/ssh/sshd_config.origin
     $sudo $ln -s \$HOME/.ssh/sshd_config /etc/ssh/sshd_config
+    \builtin printf "%s\n" $seed > \$HOME/.ssh/banner
+    $sudo $ln -fs \$HOME/.ssh/banner /etc/ssh/banner
 }
 scp.put.remote()
 {
@@ -713,12 +652,15 @@ sshfs.reconfig()
 }
 sshfs.unmount.github()
 {
-    \builtin \cd \$HOME && $fusermount3 -u $githubdir
+    \builtin \cd \$HOME && $fusermount3 -u $githubdir ||\
+    $sudo $umount -l $githubdir
 }
 sshfs.github()
 {
     $egrep $githubdir /proc/mounts && return
-    $sshfs $user@githost:$githubdir -o port=${port},allow_root\${address} $githubdir
+    $sshfs $user@githost:$githubdir \
+    -o port=${port},allow_root\${address},ServerAliveInterval=15 \
+    $githubdir
 }
 sshfs.mount()
 {
@@ -737,7 +679,8 @@ sshfs.mount()
 sshfs.unmount()
 {
     local mountpoint=\${1:?[mountpint]};
-    (\builtin \cd \$HOME && $fusermount3 -u \$mountpoint)
+    \builtin \cd \$HOME && $fusermount3 -u \$mountpoint
+    $sudo $umount -l $mountpoint
 }
 conagent.myip()
 {
